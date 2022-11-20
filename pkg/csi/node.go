@@ -1,6 +1,6 @@
 /*
-    Copyright 2021 VMware, Inc.
-    SPDX-License-Identifier: Apache-2.0
+   Copyright 2021 VMware, Inc.
+   SPDX-License-Identifier: Apache-2.0
 */
 
 package csi
@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/akutz/gofsutil"
@@ -27,12 +28,13 @@ const (
 	// is pre-allocated for the HBA. Hence we have only 15 disks.
 	maxVolumesPerNode = 15
 
-	DevDiskPath = "/dev/disk/by-path"
+	DevDiskPath  = "/dev/disk/by-path"
+	ScsiHostPath = "/sys/class/scsi_host"
 )
 
 type nodeService struct {
-	Driver        *VCDDriver
-	NodeID        string
+	Driver *VCDDriver
+	NodeID string
 }
 
 // NewNodeService creates and returns a NodeService struct.
@@ -119,12 +121,13 @@ func (ns *nodeService) NodeStageVolume(ctx context.Context,
 		return nil, status.Error(codes.InvalidArgument, "Staging target not provided")
 	}
 
+	//Todo: write file
+	err := ns.rescanDiskInVM(ctx)
 	devicePath, err := ns.getDiskPath(ctx, vmFullName, diskUUID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to obtain disk for vm [%s], disk [%s]: [%v]",
 			vmFullName, volumeID, err)
 	}
-
 	// Check if already mounted
 	isMounted, isMountedAsExpected, err := ns.isVolumeMountedAsExpected(ctx, devicePath, mountDir, mountMode)
 	if err != nil {
@@ -252,7 +255,7 @@ func (ns *nodeService) NodePublishVolume(ctx context.Context,
 	mountFlags := append(mnt.GetMountFlags(), mountMode)
 
 	// verify that host dir exists
-	hostMountDirExists, err := ns.checkIfDirExists(hostMountDir);
+	hostMountDirExists, err := ns.checkIfDirExists(hostMountDir)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "unable to check if host mount dir [%s] exists: [%v]",
 			hostMountDir, err)
@@ -325,7 +328,7 @@ func (ns *nodeService) NodeUnpublishVolume(ctx context.Context,
 	}
 
 	isDirMounted, err := ns.checkIfDirMounted(ctx, podMountDir)
-	if err!= nil {
+	if err != nil {
 		return nil, fmt.Errorf("unable to check if pod mount dir [%s] is mounted: [%v]", podMountDir, err)
 	}
 	if !isDirMounted {
@@ -384,18 +387,40 @@ func (ns *nodeService) NodeGetVolumeStats(ctx context.Context,
 		Usage: []*csi.VolumeUsage{
 			{
 				Available: int64(statFS.Bavail) * int64(statFS.Bsize),
-				Total: int64(statFS.Blocks) * int64(statFS.Bsize),
-				Used: (int64(statFS.Blocks) - int64(statFS.Bavail)) * int64(statFS.Bsize),
-				Unit: csi.VolumeUsage_BYTES,
+				Total:     int64(statFS.Blocks) * int64(statFS.Bsize),
+				Used:      (int64(statFS.Blocks) - int64(statFS.Bavail)) * int64(statFS.Bsize),
+				Unit:      csi.VolumeUsage_BYTES,
 			},
 			{
 				Available: int64(statFS.Ffree),
-				Total: int64(statFS.Files),
-				Used: int64(statFS.Files) - int64(statFS.Ffree),
-				Unit: csi.VolumeUsage_INODES,
+				Total:     int64(statFS.Files),
+				Used:      int64(statFS.Files) - int64(statFS.Ffree),
+				Unit:      csi.VolumeUsage_INODES,
 			},
 		},
 	}, nil
+}
+
+func (ns *nodeService) rescanDiskInVM(ctx context.Context) error {
+	err := filepath.Walk(ScsiHostPath, func(path string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		reg, err2 := regexp.Compile("^host[0-9]")
+		if err2 != nil {
+			return err2
+		}
+		klog.Infof("Checking directory or file: [%s] => [%s]\n", path, fi.Name())
+		if fi.IsDir() && reg.MatchString(fi.Name()) {
+			klog.Infof(fmt.Sprintf("Select directory %s", fi.Name()))
+			_, err4 := exec.Command("bash", "-c", fmt.Sprintf("echo \"- - -\" > %s/scan", path)).CombinedOutput()
+			if err4 != nil {
+				klog.Errorf("Encounter error while rescanning the disk in VM;executing command failed, [%v]", err4)
+			}
+		}
+		return nil
+	})
+	return err
 }
 
 // getDiskPath looks for a device corresponding to vmName:diskName as stored in vSphere. It
@@ -410,7 +435,7 @@ func (ns *nodeService) getDiskPath(ctx context.Context, vmFullName string, diskU
 	hexDiskUUID := strings.ReplaceAll(diskUUID, "-", "")
 
 	guestDiskPath := ""
-	err := filepath.Walk(DevDiskPath, func (path string, fi os.FileInfo, err error) error {
+	err := filepath.Walk(DevDiskPath, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -422,7 +447,7 @@ func (ns *nodeService) getDiskPath(ctx context.Context, vmFullName string, diskU
 		}
 
 		fileToProcess := path
-		if fi.Mode() & os.ModeSymlink != 0 {
+		if fi.Mode()&os.ModeSymlink != 0 {
 			dst, err := filepath.EvalSymlinks(path)
 			if err != nil {
 				klog.Infof("Error accessing file [%s]: [%v]", path, err)
@@ -447,7 +472,7 @@ func (ns *nodeService) getDiskPath(ctx context.Context, vmFullName string, diskU
 		}
 		out := strings.TrimSpace(string(outBytes))
 		if len(out) == 33 {
-			out = out [1:]
+			out = out[1:]
 		} else if len(out) != 32 {
 			klog.Infof("Obtained uuid with incorrect length: [%s]", out)
 			return nil
