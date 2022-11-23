@@ -3,6 +3,7 @@ package vcdcsiclient
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -178,93 +179,93 @@ var _ = Describe("CSI Driver Automation", func() {
 		// Todo: check PV in VCD
 	})
 
-	//Describe("Deployment Installation", func() {
-	//	It("should create a successful deployment", func() {
-	//		// Todo: Add PVC
-	//		deploymentClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
-	//
-	//		deployment := &appsv1.Deployment{
-	//			ObjectMeta: metav1.ObjectMeta{
-	//				Name: "wordpress-mysql",
-	//			},
-	//			Spec: appsv1.DeploymentSpec{
-	//				Selector: &metav1.LabelSelector{
-	//					MatchLabels: map[string]string{
-	//						"app":  "wordpress",
-	//						"tier": "mysql",
-	//					},
-	//				},
-	//				Strategy: appsv1.DeploymentStrategy{
-	//					Type: appsv1.RecreateDeploymentStrategyType,
-	//				},
-	//				Template: apiv1.PodTemplateSpec{
-	//					ObjectMeta: metav1.ObjectMeta{
-	//						Labels: map[string]string{
-	//							"app":  "wordpress",
-	//							"tier": "mysql",
-	//						},
-	//					},
-	//					Spec: apiv1.PodSpec{
-	//						Containers: []apiv1.Container{
-	//							{
-	//								Name:  "mysql",
-	//								Image: "mysql:5.6",
-	//								Env: []apiv1.EnvVar{
-	//									{
-	//										Name: "MYSQL_ROOT_PASSWORD",
-	//										ValueFrom: &apiv1.EnvVarSource{
-	//											SecretKeyRef: &apiv1.SecretKeySelector{
-	//												Key: "password",
-	//												LocalObjectReference: apiv1.LocalObjectReference{
-	//													Name: "mysql-pass",
-	//												},
-	//											},
-	//										},
-	//									},
-	//								},
-	//								Ports: []apiv1.ContainerPort{
-	//									{
-	//										Name:          "http",
-	//										Protocol:      apiv1.ProtocolTCP,
-	//										ContainerPort: 3306,
-	//									},
-	//								},
-	//								VolumeMounts: []apiv1.VolumeMount{
-	//									{
-	//										Name:      "mysql-persistent-storage",
-	//										MountPath: "/var/lib/mysql",
-	//									},
-	//								},
-	//							},
-	//						},
-	//						Volumes: []apiv1.Volume{
-	//							{
-	//								Name: "mysql-persistent-storage",
-	//								VolumeSource: apiv1.VolumeSource{
-	//									PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
-	//										ClaimName: "mysql-pv-claim",
-	//									},
-	//								},
-	//							},
-	//						},
-	//					},
-	//				},
-	//			},
-	//		}
-	//
-	//		result, err := deploymentClient.Create(deployment)
-	//		Expect(err).NotTo(HaveOccurred())
-	//		Expect(result).NotTo(BeNil())
-	//
-	//	})
-	//})
-	//
-	//Describe("PVC Verification in Kubernetes", func() {
-	//	It("PVC should be visible", func() {
-	//		pvc, err := clientset.CoreV1().PersistentVolumeClaims(apiv1.NamespaceDefault).Get("mysql-pv-claim", metav1.GetOptions{})
-	//		Expect(err).NotTo(HaveOccurred())
-	//		Expect(pvc).NotTo(BeNil())
-	//		By("PVC status should be 'bound'")
-	//	})
-	//})
+	Describe("Deployment Installation", func() {
+		It("should create a successful deployment", func() {
+			// Todo: Add PVC
+			deploymentClient := clientset.AppsV1().Deployments(apiv1.NamespaceDefault)
+
+			deployment := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "wordpress-mysql",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"app":  "wordpress",
+							"tier": "mysql",
+						},
+					},
+					Strategy: appsv1.DeploymentStrategy{
+						Type: appsv1.RecreateDeploymentStrategyType,
+					},
+					Template: apiv1.PodTemplateSpec{
+						ObjectMeta: metav1.ObjectMeta{
+							Labels: map[string]string{
+								"app":  "wordpress",
+								"tier": "mysql",
+							},
+						},
+						Spec: apiv1.PodSpec{
+							Containers: []apiv1.Container{
+								{
+									Name:  "mysql",
+									Image: "mysql:5.6",
+									Env: []apiv1.EnvVar{
+										{
+											Name: "MYSQL_ROOT_PASSWORD",
+											ValueFrom: &apiv1.EnvVarSource{
+												SecretKeyRef: &apiv1.SecretKeySelector{
+													Key: "password",
+													LocalObjectReference: apiv1.LocalObjectReference{
+														Name: "mysql-pass",
+													},
+												},
+											},
+										},
+									},
+									Ports: []apiv1.ContainerPort{
+										{
+											Name:          "http",
+											Protocol:      apiv1.ProtocolTCP,
+											ContainerPort: 3306,
+										},
+									},
+									VolumeMounts: []apiv1.VolumeMount{
+										{
+											Name:      "mysql-persistent-storage",
+											MountPath: "/var/lib/mysql",
+										},
+									},
+								},
+							},
+							Volumes: []apiv1.Volume{
+								{
+									Name: "mysql-persistent-storage",
+									VolumeSource: apiv1.VolumeSource{
+										PersistentVolumeClaim: &apiv1.PersistentVolumeClaimVolumeSource{
+											ClaimName: "mysql-pv-claim",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			result, err := deploymentClient.Create(deployment)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+		})
+	})
+
+	Describe("PVC Verification in Kubernetes", func() {
+		It("PVC should be visible", func() {
+			pvc, err := clientset.CoreV1().PersistentVolumeClaims(apiv1.NamespaceDefault).Get("mysql-pv-claim", metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pvc).NotTo(BeNil())
+			By("PVC status should be 'bound'")
+		})
+	})
 })
